@@ -1,0 +1,93 @@
+[Inspection and Analysis] 당신은 숙련된 software architect, SDLC reviewer, and code inspection specialist 입니다. 당신의 task는 현재 작업 경로 내의 모든 디렉터리를 순회하며 codebase를 analysis 한 뒤, 개별 디렉터리 별로 컨텍스트 파일("GEMINI.md")을 생성하는 것 입니다. 
+
+다음 단계를 엄격히 따르십시오:
+1. Code Comprehension:
+   - Read and summarize what the code actually does, not what it intends to do.
+   - Identify the core responsibilities and behavior of this module.
+
+2. SDLC Review :
+   - Reverse-engineer requirements from the code.
+   - Evaluate alignment with typical development phases (requirements *.md and implementation result).
+   - Identify missing design artifacts or inconsistencies.
+
+3. Formal Code Inspection:
+   - Apply checklist-driven inspection:
+     - Correctness
+     - API clarity
+     - Naming consistency
+     - Error handling
+     - Coupling & cohesion
+     - Maintainability issues
+     - Prototype traces, hard-coded sections, tech debt
+   - List all detected issues.
+
+4. Interface Extraction
+   - Infer inputs, outputs, data flows, and dependencies.
+   - Document internal components (classes, functions, scripts, state machines).
+
+5. Generate subfolder-level AGENTS.md   
+   - Use the markdown format defined below:
+
+```markdown
+# Agent Summary: {FOLDER_NAME}
+
+## 1. Responsibility
+(1~3 sentence summary)
+
+## 2. Inputs / Outputs
+### Inputs
+- ...
+### Outputs
+- ...
+
+## 3. Internal Structure
+- 주요 클래스/함수 목록
+- 대표적 실행 흐름(sequence of operations)
+
+## 4. Dependencies
+- 내부 모듈
+- 외부 모듈
+
+## 5. Inspection Findings (Checklist-Based)
+- 기능적 결함
+- 설계적 결함
+- 유지보수 리스크
+- 프로토타입 흔적
+- 추천 리팩터링
+
+## 6. Testability
+- 테스트 전략 또는 실행 방법
+
+상기의 작업이 마무리 되면 다음 작업을 수행 해 주십시오: 
+
+[1] Read all provided AGENTS.md documents:
+	Extract each agent’s role, APIs, dependencies, and behavior.
+
+[2] Build a system-level mental model:
+	Identify data flow between agents
+	Identify responsibility boundaries
+	Infer the global architecture
+	Detect cross-agent inconsistencies or missing interfaces
+
+[3] Generate the root-level AGENTS.md using the following template:
+
+## 1. System Summary
+- 전체 시스템이 해결하려는 문제를 3~5줄로 설명
+
+## 2. AGENTS.md List
+| Docs | Path | Responsibility | I/O Summary |
+
+## 3. Architecture Overview
+- Agent 간의 상호작용 흐름 (text-based sequence 또는 pipeline)
+- 주요 데이터 흐름
+- 모듈 간 의존성 구조
+
+## 4. SDLC & Prototype Review
+- Code에서 역추론된 요구사항
+- 프로토타입 특성 및 품질 이슈
+- 전체적인 리팩터링 필요 영역
+
+## 5. Next Iteration Recommendations
+- 기능적 개선
+- 구조 개선
+- 테스트 보완
