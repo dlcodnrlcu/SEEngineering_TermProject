@@ -1,73 +1,60 @@
-# Agent 요약: extension
+# Agent 요약: Extension
 
-## 1. 책임
-`extension` 모듈은 웹 페이지에서 익명화된 사용자 상호작용 데이터(특히 클릭)를 수집하고, 이 수집에 대한 사용자 동의를 관리하며, 데이터를 로컬에 버퍼링하고, 주기적으로 구성된 백엔드 서버에 일괄 업로드하는 역할을 하는 크롬 확장 프로그램입니다.
+## 1. 책임 (Responsibility)
+이 에이전트는 "Follow Me!" 시스템의 클라이언트 측 데이터 수집기 및 사용자 인터페이스 역할을 하는 Chrome 브라우저 확장 프로그램입니다. 사용자 상호작용을 기록하고, 분석을 위해 백엔드로 전송하며, 분석 결과를 기반으로 웹 페이지에 내비게이션 가이드를 표시합니다.
 
-## 2. 입력 / 출력
+## 2. 입력 / 출력 (Inputs / Outputs)
 ### 입력
-- 웹 페이지에서의 사용자 `click` 이벤트.
-- 동의 페이지와의 사용자 상호작용 ("동의" / "비동의").
-- 확장 프로그램 설치 이벤트.
-- 예약된 작업을 위한 크롬 알람 이벤트.
-- 로그 업로드를 위한 백엔드 API 응답.
+- **사용자 행동**: 클릭, 양식 입력, 스크롤, 페이지 이동.
+- **서버 API (GET `/api/v1/guide`)**: 현재 URL에 대한 JSON 기반 가이드 데이터를 수신합니다.
+- **브라우저 저장소 (`chrome.storage.local`)**: 사용자 동의 상태, 세션 ID, 가이드 활성화 설정을 읽습니다.
+
 ### 출력
-- `background.js` 스크립트로 전송된 익명화된 클릭 이벤트 데이터.
-- `chrome.storage.local`에 저장된 동의 상태.
-- `chrome.storage.local`에 저장된 버퍼링된 로그 데이터.
-- `http://127.0.0.1:5000/api/v1/log_batch`로 전송된 HTTP POST 요청 (로그 데이터 배치).
-- 크롬 `console.log` 및 `console.error` 메시지.
-- `consent.html` 페이지 열기.
+- **서버 API (POST `/api/v1/log_batch`)**: 수집된 사용자 상호작용 로그 배치를 JSON 배열로 전송합니다.
+- **DOM 조작**: 가이드를 위한 시각적 오버레이(하이라이트 상자 및 툴팁)를 생성하기 위해 HTML 및 CSS를 주입합니다.
+- **브라우저 저장소 (`chrome.storage.local`)**:
+  - **쓰기**: 전송 전 로그 데이터를 버퍼링하고, 팝업에서 설정한 사용자 설정을 저장합니다.
 
-## 3. 내부 구조
-- 주요 클래스/함수 목록:
-    - `background.js`:
-        - `LOG_BUFFER_KEY`, `CONSENT_KEY`, `UPLOAD_ALARM_NAME` (상수)
-        - `chrome.runtime.onInstalled.addListener` (이벤트 리스너)
-        - `chrome.runtime.onMessage.addListener` (이벤트 리스너)
-        - `chrome.alarms.onAlarm.addListener` (이벤트 리스너)
-        - `sendBufferedLogs()` (함수)
-    - `content.js`:
-        - `CONSENT_KEY` (상수)
-        - `document.body.addEventListener('click', ...)` (이벤트 리스너)
-    - `consent.js`:
-        - `document.getElementById('agree').addEventListener('click', ...)` (이벤트 리스너)
-        - `document.getElementById('disagree').addEventListener('click', ...)` (이벤트 리스너)
-    - `manifest.json`: 설정 파일.
-    - `consent.html`, `popup.html`: 사용자 인터페이스 파일.
-- 대표적 실행 흐름(sequence of operations):
-    1.  **설치/동의:** 설치 시 `background.js`가 동의 여부를 확인합니다. 동의하지 않은 경우 `consent.html`이 열립니다. 사용자는 `consent.js`를 통해 `consent.html`과 상호작용하여 로컬 저장소에 `hasConsented`를 설정합니다.
-    2.  **데이터 수집:** `content.js`는 모든 페이지에서 클릭을 수신합니다. `hasConsented`가 true이면 클릭 데이터를 캡처하여 `background.js`에 메시지로 보냅니다.
-    3.  **데이터 버퍼링 및 업로드:** `background.js`는 클릭 데이터를 수신하고 `hasConsented`를 확인한 후 로컬 저장소에 버퍼링합니다. 알람이 주기적으로 `sendBufferedLogs()`를 트리거합니다. `sendBufferedLogs()`는 버퍼링된 데이터를 검색하고 `hasConsented`인 경우 `fetch`를 통해 백엔드로 보냅니다. 성공 시 버퍼가 지워집니다.
+## 3. 내부 구조 (Internal Structure)
+- **`manifest.json`**: 권한(storage, scripting, alarms), API에 대한 호스트 권한, 스크립트 진입점을 정의하는 핵심 구성 파일입니다.
+- **`background.js` (서비스 워커)**:
+  - 로그 데이터에 대한 영구 버퍼를 관리합니다.
+  - `chrome.alarms`를 사용하여 버퍼링된 데이터를 주기적으로 백엔드 API로 전송합니다.
+  - 설치 시 고유한 세션 ID를 생성합니다.
+- **`content.js`**:
+  - 모든 웹 페이지에 주입됩니다.
+  - 사용자 이벤트(클릭, 입력, 스크롤) 및 페이지 전환을 캡처합니다.
+  - 로깅 전 민감한 데이터를 삭제하기 위해 PII 마스킹을 구현합니다.
+  - 서버에서 가이드를 가져와 `GuideManager` UI를 렌더링합니다.
+- **`popup.html` / `popup.js` / `popup.css`**: 가이드 표시를 활성화 또는 비활성화하는 토글을 포함하여 브라우저 액션 팝업을 위한 UI를 제공합니다.
+- **`consent.html` / `consent.js`**: 데이터 수집에 대한 사용자 동의를 요청하는 일회성 페이지입니다.
 
-## 4. 의존성
-- 내부 모듈:
-    - `background.js`는 들어오는 메시지에 대해 `content.js`에 의존하고 동의 상태에 대해 `consent.js`/`consent.html`에 의존합니다.
-    - `content.js`는 메시지 전달을 위해 `background.js`에 의존합니다.
-    - `consent.js`는 DOM 요소에 대해 `consent.html`에 의존합니다.
-- 외부 모듈:
-    - 크롬 확장 API: `chrome.storage`, `chrome.runtime`, `chrome.tabs`, `chrome.alarms`.
-    - 웹 API: HTTP 요청을 위한 `fetch`, `document.body.addEventListener`.
+## 4. 의존성 (Dependencies)
+### 내부 모듈
+- `content.js`는 `chrome.runtime` API를 사용하여 `background.js`로 메시지를 보냅니다.
+- `popup.js`는 `chrome.storage.local`에 기록하여 `content.js`의 동작을 수정합니다.
 
-## 5. 검사 결과 (체크리스트 기반)
-- 기능적 결함:
-    - 백엔드 API `log_batch`가 데이터를 올바르게 처리한다고 가정할 때 핵심 기능에서 확인된 결함 없음.
-- 설계적 결함:
-    - `background.js`에 하드코딩된 백엔드 URL (`http://127.0.0.1:5000/api/v1/log_batch`). 이로 인해 다른 배포 환경에 대한 쉬운 구성이 방해됩니다.
-    - `content.js`는 `event.target.textContent`를 캡처하는데, 이는 잘려도 PII 필터링/익명화에 대한 프롬프트의 강조를 감안할 때 캡처 전에 신중하게 익명화하거나 필터링하지 않으면 개인 식별 정보(PII)를 포함할 수 있습니다.
-- 유지보수 리스크:
-    - 확장 프로그램의 로직에 대한 단위 테스트가 없어 리팩토링이나 새로운 기능 개발이 위험합니다.
-    - 실패한 업로드에 대한 `console.error` 이상의 제한된 오류 보고/복구.
-- 프로토타입 흔적:
-    - `consent.html` 및 `popup.html`의 기본 UI는 초기 구현임을 시사합니다.
-    - 하드코딩된 백엔드 URL.
-    - 클릭 이벤트만 캡처합니다. 다른 상호작용 유형(스크롤, 양식 입력, 페이지 변경)은 아직 구현되지 않았습니다.
-- 추천 리팩터링:
-    - 백엔드 API URL을 구성 가능한 설정(예: 엔터프라이즈 정책의 경우 `chrome.storage.managed` 또는 간단한 옵션 페이지)으로 외부화합니다.
-    - 백엔드 통신 실패에 대한 보다 강력한 오류 처리 및 보고 메커니즘을 구현합니다.
-    - `content.js`에서 `textContent` 캡처에 대한 PII 삭제/익명화를 강화하거나 수집되는 `textContent`에 대한 명확한 정책을 제공합니다.
-    - 설치 후 사용자가 동의 상태 및 기타 설정을 관리할 수 있도록 옵션 페이지를 추가하는 것을 고려합니다.
+### 외부 모듈
+- **백엔드 서버**: 현재 `http://127.0.0.1:5000`으로 하드코딩된 서버의 `/api/v1/log_batch` 및 `/api/v1/guide` 엔드포인트에 의존합니다.
 
-## 6. 테스트 용이성
-- 테스트 전략 또는 실행 방법:
-    - `chrome.storage.local` 및 네트워크 요청을 검사하여 설치 흐름, 동의, 클릭 로깅 및 데이터 업로드에 대한 수동 테스트.
-    - 자동화된 테스트의 경우 Puppeteer 또는 Selenium과 같은 프레임워크를 사용하여 사용자 상호작용을 시뮬레이션하고 확장 프로그램 동작을 확인할 수 있지만 상당한 설정이 필요합니다. 순수 자바스크립트 함수(추출된 경우)에 대한 단위 테스트는 구현하기가 더 쉽습니다.
+## 5. 검사 결과 (Inspection Findings)
+- **기능적 결함**: 백엔드 서버가 다운되면 버퍼링된 로그가 지워지지 않아 반복적인 전송 실패가 발생합니다. 백오프(backoff)가 있는 재시도 로직이 없습니다.
+- **설계 결함**:
+  - SPA 내비게이션이 비효율적인 `setInterval`을 통해 감지됩니다. 최신 Navigation API를 사용하는 것이 더 나은 선택입니다.
+  - `GuideManager`가 DOM을 직접 조작하여 일부 웹 애플리케이션(예: React 앱)과 충돌할 수 있습니다.
+- **유지보수 리스크**:
+  - 백엔드 서버 URL이 `background.js`와 `content.js` 모두에 하드코딩되어 있어 다른 환경에 맞게 변경하기 어렵습니다.
+- **프로토타입 흔적**:
+  - PII 마스킹이 간단한 정규식에 기반하며 포괄적이지 않습니다.
+  - 코드 전반에 `console.log` 문이 존재합니다.
+  - 알람 주기가 개발용으로 1분으로 설정되어 있습니다.
+- **추천 리팩터링**:
+  - 하드코딩된 API URL을 중앙 구성 위치로 이동합니다.
+  - `setInterval` URL 확인을 Navigation API 또는 `popstate` 및 `hashchange` 이벤트를 수신하여 대체합니다.
+  - 스타일 충돌을 피하기 위해 가이드 UI의 모든 DOM 조작을 Shadow DOM 내에 캡슐화합니다.
+
+## 6. 테스트 용이성 (Testability)
+- **수동 테스트**: 브라우저에 확장 프로그램을 로드하고 웹사이트를 방문하면서 백엔드 서버를 로컬에서 실행해야 합니다.
+- **자동화 테스트**:
+  - 스크립트 내 로직은 Jest와 같은 프레임워크와 모의 Chrome API 라이브러리(`jest-chrome` 등)를 결합하여 단위 테스트할 수 있습니다.
+  - 엔드투엔드 테스트는 Puppeteer나 Selenium과 같은 브라우저 자동화 프레임워크로 달성할 수 있습니다.

@@ -1,36 +1,59 @@
+import os
 from flask import Flask, request, jsonify
+from flask_cors import CORS
+from dotenv import load_dotenv
+from datetime import datetime
+import db
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 
-@app.route('/api/v1/log', methods=['POST'])
-def log_event():
-    """
-    Receives and logs a single user behavior data from the extension.
-    (This can be kept for simplicity or for single event logging if needed)
-    """
-    data = request.get_json()
-    if not data:
-        return jsonify({"status": "error", "message": "No data provided"}), 400
-
-    print("Received single log:", data)
-    return jsonify({"status": "success", "message": "Log received"}), 201
+# Apply CORS settings
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 @app.route('/api/v1/log_batch', methods=['POST'])
 def log_batch_events():
     """
-    Receives and logs a batch of user behavior data from the extension.
+    Receives a batch of user behavior logs from the extension, adds a timestamp,
+    and inserts them into the database.
     """
-    data = request.get_json()
-    if not isinstance(data, list) or not data:
+    logs = request.get_json()
+    if not isinstance(logs, list) or not logs:
         return jsonify({"status": "error", "message": "Invalid or empty batch"}), 400
 
-    # In a real implementation, this would be an efficient bulk insert into a database.
-    print(f"Received batch of {len(data)} logs.")
-    for log in data:
-        print(" - Log:", log)
+    # Add server-side timestamp
+    timestamp = datetime.utcnow()
+    for log in logs:
+        log['server_received_at'] = timestamp
 
-    return jsonify({"status": "success", "message": f"Batch of {len(data)} logs received"}), 201
+    # Insert into database
+    result = db.insert_logs(logs)
+    if result:
+        return jsonify({"status": "success", "message": f"Batch of {len(logs)} logs received"}), 201
+    else:
+        return jsonify({"status": "error", "message": "Failed to save logs to database"}), 500
 
+@app.route('/api/v1/guide', methods=['GET'])
+def get_guide():
+    """
+    Provides a guide for a given URL.
+    """
+    url = request.args.get('url')
+    if not url:
+        return jsonify({"status": "error", "message": "URL parameter is required"}), 400
+
+    guide = db.get_guide_for_url(url)
+    if guide:
+        # Pymongo returns an _id field which is not JSON serializable by default
+        if '_id' in guide:
+            guide['_id'] = str(guide['_id'])
+        return jsonify({"status": "success", "data": guide}), 200
+    else:
+        return jsonify({"status": "success", "data": None}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_DEBUG", "true").lower() == "true"
+    app.run(debug=debug, port=port)

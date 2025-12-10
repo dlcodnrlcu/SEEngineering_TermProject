@@ -1,0 +1,6 @@
+pandas
+numpy
+scikit-learn
+pymongo
+python-dotenv
+pytest==8.0.0
